@@ -1,5 +1,7 @@
 # Coub Explorer for VS Code
 
+![Coub Explorer Screenshot](media/description.png)
+
 Enjoy short, looping videos from Coub directly in your VS Code panel!
 
 ## Features
