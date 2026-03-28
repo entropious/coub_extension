@@ -2,7 +2,7 @@
   "name": "coub-panel",
   "displayName": "Coub Panel",
   "description": "Watch Coubs in a VS Code panel with auto-advance and random discovery.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "Entro",
   "repository": {
     "type": "git",
@@ -32,6 +32,7 @@
     "views": {
       "coub-panel-container": [
         {
+          "icon": "media/icon.png",
           "type": "webview",
           "id": "coub-panel.view",
           "name": "Coub Player",
