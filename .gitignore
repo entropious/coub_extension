@@ -1,1 +1,5 @@
-/coub-panel-0.1.0.vsix
+node_modules
+out
+.vscode-test
+*.vsix
+.DS_Store
