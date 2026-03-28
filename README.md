@@ -1,4 +1,4 @@
-# <img src="media/icon.png" width="100" /> Coub Explorer for VS Code
+# Coub Explorer for VS Code
 
 Enjoy short, looping videos from Coub directly in your VS Code panel!
 

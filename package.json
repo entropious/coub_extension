@@ -6,7 +6,7 @@
   "publisher": "Entro",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Entro/coub-extension"
+    "url": "https://github.com/entropious/coub_extension"
   },
   "engines": {
     "vscode": "^1.85.0"
