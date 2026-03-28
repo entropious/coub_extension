@@ -1,0 +1,92 @@
+{
+  "name": "coub-panel",
+  "displayName": "Coub Panel",
+  "description": "Watch Coubs in a VS Code panel with auto-advance and random discovery.",
+  "version": "0.1.0",
+  "publisher": "Entro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Entro/coub-extension"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "media/icon.png",
+  "activationEvents": [
+    "onView:coub-panel.view"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "coub-panel-container",
+          "title": "Coub Explorer",
+          "icon": "media/coub.svg"
+        }
+      ]
+    },
+    "views": {
+      "coub-panel-container": [
+        {
+          "type": "webview",
+          "id": "coub-panel.view",
+          "name": "Coub Player",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "coub-panel.next",
+        "title": "Next Coub",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "coub-panel.refresh",
+        "title": "Refresh Feed",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "coub-panel.next",
+          "when": "view == coub-panel.view",
+          "group": "navigation"
+        },
+        {
+          "command": "coub-panel.refresh",
+          "when": "view == coub-panel.view",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.11.19",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@typescript-eslint/parser": "^8.57.2",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^10.1.0",
+    "glob": "^13.0.6",
+    "mocha": "^11.3.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
