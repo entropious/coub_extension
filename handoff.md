@@ -16,8 +16,6 @@ We use `fs.watch` to monitor this directory. The logic is encapsulated in the `C
 ```typescript
 this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
     if (filename && filename.endsWith('.pb')) {
-        eventCount++;
-        
         // Initial trigger: Focus panel and start playback
         if (!isSessionActive) {
             isSessionActive = true;
@@ -29,12 +27,10 @@ this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, fi
             clearTimeout(activityTimer);
         }
 
-        // Wait longer (8s) for thinking phase, 1.5s for streaming
-        const debounceTime = eventCount < 5 ? 8000 : 1500;
+        const debounceTime = 6000;
 
         activityTimer = setTimeout(() => {
             isSessionActive = false;
-            eventCount = 0;
             this.pause(); // Stop Coub when AI stops talking
             activityTimer = null;
         }, debounceTime);
@@ -44,7 +40,7 @@ this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, fi
 
 ## 4. Optimization & Reliability
 1. **Persistent: false**: Watcher doesn't keep the VS Code process alive on shutdown.
-2. **Dynamic Debounce**: 8s initial window covers AI "thinking" phase; 1.5s window ensures Coub stops promptly after the response finishes.
+2. **Fixed 6s Debounce**: Simple and predictable behavior for Gemini syncing.
 3. **UI Toggle**: Added "Gemini Sync" switch to the sidebar; the `fs.watch` session is physically closed when disabled.
 4. **Lifecycle**: The provider implements `vscode.Disposable` to ensure the watcher is closed on extension deactivation.
 

@@ -68,15 +68,12 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             return;
         }
 
-        let eventCount = 0;
         let isSessionActive = false;
         let activityTimer: NodeJS.Timeout | null = null;
 
         try {
             this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
                 if (filename && filename.endsWith('.pb')) {
-                    eventCount++;
-                    
                     if (!isSessionActive) {
                         isSessionActive = true;
                         vscode.commands.executeCommand('coub-panel.view.focus');
@@ -87,13 +84,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                         clearTimeout(activityTimer);
                     }
 
-                    // Wait longer (8s) for the first few events (Gemini thinking),
-                    // but pause quickly (1.5s) once the token burst finishes.
-                    const debounceTime = eventCount < 5 ? 8000 : 1500;
+                    const debounceTime = 6000;
 
                     activityTimer = setTimeout(() => {
                         isSessionActive = false;
-                        eventCount = 0;
                         this.pause();
                         activityTimer = null;
                     }, debounceTime);
