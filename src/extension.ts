@@ -68,29 +68,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             return;
         }
 
-        let isSessionActive = false;
-        let activityTimer: NodeJS.Timeout | null = null;
-
         try {
             this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
                 if (filename && filename.endsWith('.pb')) {
-                    if (!isSessionActive) {
-                        isSessionActive = true;
-                        vscode.commands.executeCommand('coub-panel.view.focus');
-                    }
                     this.play();
-
-                    if (activityTimer) {
-                        clearTimeout(activityTimer);
-                    }
-
-                    const debounceTime = 6000;
-
-                    activityTimer = setTimeout(() => {
-                        isSessionActive = false;
-                        this.pause();
-                        activityTimer = null;
-                    }, debounceTime);
                 }
             });
         } catch (err) {
@@ -122,7 +103,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'webviewReady':
-                    webviewView.webview.postMessage({ type: 'setFollowGemini', value: this.followGeminiEnabled });
+                    webviewView.webview.postMessage({ 
+                        type: 'setFollowGemini', 
+                        value: this.followGeminiEnabled
+                    });
                     await this.nextCoub();
                     break;
                 case 'requestNext':
