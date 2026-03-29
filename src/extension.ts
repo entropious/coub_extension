@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
 
 export function activate(context: vscode.ExtensionContext) {
     const provider = new CoubViewProvider(context.extensionUri);
@@ -24,6 +28,54 @@ export function activate(context: vscode.ExtensionContext) {
             provider.refreshFeed();
         })
     );
+
+    // --- Gemini Watcher Section ---
+    const geminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+    let activityTimer: NodeJS.Timeout | null = null;
+    let isSessionActive = false;
+    let eventCount = 0;
+
+    if (fs.existsSync(geminiDir)) {
+        try {
+            const watcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
+                if (filename && filename.endsWith('.pb')) {
+                    eventCount++;
+                    
+                    if (!isSessionActive) {
+                        isSessionActive = true;
+                        vscode.commands.executeCommand('coub-panel.view.focus');
+                    }
+                    provider.play();
+
+                    if (activityTimer) {
+                        clearTimeout(activityTimer);
+                    }
+
+                    // Wait longer (8s) for the first few events (Gemini thinking),
+                    // but pause quickly (1.5s) once the token burst finishes.
+                    const debounceTime = eventCount < 5 ? 8000 : 1500;
+
+                    activityTimer = setTimeout(() => {
+                        isSessionActive = false;
+                        eventCount = 0;
+                        provider.pause();
+                        activityTimer = null;
+                    }, debounceTime);
+                }
+            });
+
+            context.subscriptions.push({ 
+                dispose: () => {
+                    watcher.close();
+                    if (activityTimer) {
+                        clearTimeout(activityTimer);
+                    }
+                } 
+            });
+        } catch (err) {
+            console.error('Failed to attach Gemini watcher:', err);
+        }
+    }
 }
 
 class CoubViewProvider implements vscode.WebviewViewProvider {
@@ -113,6 +165,18 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
                 type: 'loadCoub',
                 value: coub
             });
+        }
+    }
+
+    public play() {
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'play' });
+        }
+    }
+
+    public pause() {
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'pause' });
         }
     }
 
@@ -531,6 +595,12 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
             const message = event.data;
             if (message.type === 'loadCoub') {
                 loadCoub(message.value);
+            } else if (message.type === 'play') {
+                video.play();
+                audio.play();
+            } else if (message.type === 'pause') {
+                video.pause();
+                audio.pause();
             }
         });
 
