@@ -6,65 +6,49 @@ Automatically expand the panel specifically when Gemini (Antigravity) is used.
 ## 2. Problem Context
 Gemini (Antigravity) Chat operates via a proprietary UI that **does not trigger** standard VS Code command listeners like `vscode.commands.onDidExecuteCommand` during message submission. This makes it impossible to detect chat activity using high-level extension APIs.
 
-## 2. Solution: File System Monitoring (The "fs.watch" Hook)
-After investigation, it was confirmed that every user message or model response in Gemini Chat causes an update to a local database/file storage. 
-
-### Path to Conversations
-The conversation history is stored as `.pb` (Protocol Buffers) files in the following directory:
+## 3. Solution: File System Monitoring (The "fs.watch" Hook)
+Every user message or model response in Gemini Chat causes an update to `.pb` (Protocol Buffers) files in:
 `~/.gemini/antigravity/conversations/`
 
 ### Implementation Logic
-We use the Node.js `fs.watch` module to monitor this specific directory for any file changes. This provides a "zero-lag" trigger immediately after the user sends a message.
+We use `fs.watch` to monitor this directory. The logic is encapsulated in the `CoubViewProvider` class for clean lifecycle management.
 
-### Minimal Code Snippet
 ```typescript
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
+    if (filename && filename.endsWith('.pb')) {
+        eventCount++;
+        
+        // Initial trigger: Focus panel and start playback
+        if (!isSessionActive) {
+            isSessionActive = true;
+            vscode.commands.executeCommand('coub-panel.view.focus');
+        }
+        this.play();
 
-// Resolve the conversation directory
-const geminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+        if (activityTimer) {
+            clearTimeout(activityTimer);
+        }
 
-if (fs.existsSync(geminiDir)) {
-    try {
-        // Watch for changes in the directory
-        fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
-            // Check if the modified file is a conversation record (.pb)
-            if (filename && filename.endsWith('.pb')) {
-                // Trigger panel focus and Coub switch
-                handleChatActivity();
-            }
-        });
-    } catch (err) {
-        console.error('Failed to attach Gemini watcher:', err);
+        // Wait longer (8s) for thinking phase, 1.5s for streaming
+        const debounceTime = eventCount < 5 ? 8000 : 1500;
+
+        activityTimer = setTimeout(() => {
+            isSessionActive = false;
+            eventCount = 0;
+            this.pause(); // Stop Coub when AI stops talking
+            activityTimer = null;
+        }, debounceTime);
     }
-}
+});
 ```
 
-## 3. Optimization & Reliability
-To prevent system strain and "double-triggering" (especially during multi-step AI responses), the following optimizations were applied:
+## 4. Optimization & Reliability
+1. **Persistent: false**: Watcher doesn't keep the VS Code process alive on shutdown.
+2. **Dynamic Debounce**: 8s initial window covers AI "thinking" phase; 1.5s window ensures Coub stops promptly after the response finishes.
+3. **UI Toggle**: Added "Gemini Sync" switch to the sidebar; the `fs.watch` session is physically closed when disabled.
+4. **Lifecycle**: The provider implements `vscode.Disposable` to ensure the watcher is closed on extension deactivation.
 
-1. **Persistent: false**: Set `{ persistent: false }` to ensure the watcher doesn't keep the VS Code process alive if it's shutting down.
-2. **Throttling (3s)**: A `lastActivityTime` check prevents the extension from skipping multiple Coubs if the `.pb` file is updated several times in rapid succession (common during long AI generation).
-   
-```typescript
-let lastActivityTime = 0;
-const handleChatActivity = () => {
-    const now = Date.now();
-    if (now - lastActivityTime < 3000) return; // 3-second guard
-    lastActivityTime = now;
-
-    // Execute panel focus if setting is enabled
-    if (isAutoExpandEnabled) {
-        vscode.commands.executeCommand('coub-panel.view.focus');
-    }
-    
-    // Switch to next content
-    provider.nextCoub();
-};
-```
-
-## 4. Why this is the "Minimal Change"
-- **Low Overhead**: Uses OS-level file system events (FSEvents on macOS), which is extremely efficient.
-- **No Dependencies**: Relies solely on Node.js built-ins (`fs`, `path`, `os`).
-- **Complete Coverage**: Detects both *new* conversations starting and *continuations* of old ones, as both update files in the same directory.
+## 5. Why this is the "Optimal Change"
+- **Low Overhead**: Uses OS-level events.
+- **Zero Lag**: Instant detection of chat activity.
+- **User Control**: Users can opt-out of the behavior on the fly.

@@ -5,8 +5,9 @@ import * as os from 'os';
 
 
 export function activate(context: vscode.ExtensionContext) {
-    const provider = new CoubViewProvider(context.extensionUri);
+    const provider = new CoubViewProvider(context.extensionUri, context);
 
+    context.subscriptions.push(provider);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(CoubViewProvider.viewType, provider)
     );
@@ -29,15 +30,50 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // --- Gemini Watcher Section ---
-    const geminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
-    let activityTimer: NodeJS.Timeout | null = null;
-    let isSessionActive = false;
-    let eventCount = 0;
 
-    if (fs.existsSync(geminiDir)) {
+}
+
+class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+    public static readonly viewType = 'coub-panel.view';
+    private _view?: vscode.WebviewView;
+    private _coubQueue: any[] = [];
+    private _history: any[] = [];
+    private _historyIndex: number = -1;
+    private _currentCategory: string = 'hot';
+    private _page: number = 1;
+    public followGeminiEnabled: boolean = true;
+    private _geminiWatcher?: fs.FSWatcher;
+
+    constructor(
+        private readonly _extensionUri: vscode.Uri,
+        private readonly _context: vscode.ExtensionContext
+    ) {
+        this.followGeminiEnabled = this._context.globalState.get<boolean>('followGemini', true);
+        if (this.followGeminiEnabled) {
+            this.startGeminiWatcher();
+        }
+    }
+
+    public dispose() {
+        this.stopGeminiWatcher();
+    }
+
+    public startGeminiWatcher() {
+        if (this._geminiWatcher) {
+            return;
+        }
+
+        const geminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+        if (!fs.existsSync(geminiDir)) {
+            return;
+        }
+
+        let eventCount = 0;
+        let isSessionActive = false;
+        let activityTimer: NodeJS.Timeout | null = null;
+
         try {
-            const watcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
+            this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
                 if (filename && filename.endsWith('.pb')) {
                     eventCount++;
                     
@@ -45,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
                         isSessionActive = true;
                         vscode.commands.executeCommand('coub-panel.view.focus');
                     }
-                    provider.play();
+                    this.play();
 
                     if (activityTimer) {
                         clearTimeout(activityTimer);
@@ -58,38 +94,22 @@ export function activate(context: vscode.ExtensionContext) {
                     activityTimer = setTimeout(() => {
                         isSessionActive = false;
                         eventCount = 0;
-                        provider.pause();
+                        this.pause();
                         activityTimer = null;
                     }, debounceTime);
                 }
-            });
-
-            context.subscriptions.push({ 
-                dispose: () => {
-                    watcher.close();
-                    if (activityTimer) {
-                        clearTimeout(activityTimer);
-                    }
-                } 
             });
         } catch (err) {
             console.error('Failed to attach Gemini watcher:', err);
         }
     }
-}
 
-class CoubViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'coub-panel.view';
-    private _view?: vscode.WebviewView;
-    private _coubQueue: any[] = [];
-    private _history: any[] = [];
-    private _historyIndex: number = -1;
-    private _currentCategory: string = 'hot';
-    private _page: number = 1;
-
-    constructor(
-        private readonly _extensionUri: vscode.Uri
-    ) {}
+    public stopGeminiWatcher() {
+        if (this._geminiWatcher) {
+            this._geminiWatcher.close();
+            this._geminiWatcher = undefined;
+        }
+    }
 
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -108,6 +128,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'webviewReady':
+                    webviewView.webview.postMessage({ type: 'setFollowGemini', value: this.followGeminiEnabled });
                     await this.nextCoub();
                     break;
                 case 'requestNext':
@@ -115,6 +136,15 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'requestBack':
                     await this.previousCoub();
+                    break;
+                case 'toggleFollowGemini':
+                    this.followGeminiEnabled = data.value;
+                    this._context.globalState.update('followGemini', data.value);
+                    if (this.followGeminiEnabled) {
+                        this.startGeminiWatcher();
+                    } else {
+                        this.stopGeminiWatcher();
+                    }
                     break;
                 case 'setCategory':
                     this._currentCategory = data.value;
@@ -460,6 +490,13 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
                     <option value="rising">Rising</option>
                     <option value="fresh">Fresh</option>
                 </select>
+                <div class="auto-play-container">
+                    <span title="Sync with Gemini (Antigravity)">Gemini Sync</span>
+                    <label class="switch">
+                        <input type="checkbox" id="gemini-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
             <div class="controls">
                 <div class="auto-play-container">
@@ -501,6 +538,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
         const nextBtn = document.getElementById('next-btn');
         const categorySelect = document.getElementById('category-select');
         const autoPlayToggle = document.getElementById('auto-play-toggle');
+        const geminiToggle = document.getElementById('gemini-toggle');
         const loadingScreen = document.getElementById('loading-screen');
         const coubTitle = document.getElementById('coub-title');
         const coubMeta = document.getElementById('coub-meta');
@@ -579,6 +617,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
             }
         });
 
+        geminiToggle.addEventListener('change', () => {
+            vscode.postMessage({ type: 'toggleFollowGemini', value: geminiToggle.checked });
+        });
+
         categorySelect.addEventListener('change', () => {
             loadingScreen.style.opacity = 1;
             loadingScreen.style.pointerEvents = 'auto';
@@ -601,6 +643,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider {
             } else if (message.type === 'pause') {
                 video.pause();
                 audio.pause();
+            } else if (message.type === 'setFollowGemini') {
+                geminiToggle.checked = message.value;
             }
         });
 
