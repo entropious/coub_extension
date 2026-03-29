@@ -16,6 +16,7 @@
   ],
   "icon": "media/icon.png",
   "activationEvents": [
+    "*",
     "onView:coub-panel.view"
   ],
   "main": "./out/extension.js",
