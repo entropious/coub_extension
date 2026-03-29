@@ -51,6 +51,18 @@
         "command": "coub-panel.refresh",
         "title": "Refresh Feed",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "coub-panel.toggle-play",
+        "title": "Toggle Play/Pause",
+        "category": "Coub"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "coub-panel.toggle-play",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
       }
     ],
     "menus": {
