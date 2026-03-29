@@ -30,6 +30,11 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('coub-panel.toggle-play', () => {
+            provider.togglePlay();
+        })
+    );
 
 }
 
@@ -185,6 +190,12 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     public pause() {
         if (this._view) {
             this._view.webview.postMessage({ type: 'pause' });
+        }
+    }
+
+    public togglePlay() {
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'toggle' });
         }
     }
 
@@ -621,6 +632,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             } else if (message.type === 'pause') {
                 video.pause();
                 audio.pause();
+            } else if (message.type === 'toggle') {
+                togglePlay();
             } else if (message.type === 'setFollowGemini') {
                 geminiToggle.checked = message.value;
             }
