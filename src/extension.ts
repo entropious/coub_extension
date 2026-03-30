@@ -49,7 +49,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     private _coubQueue: any[] = [];
     private _history: any[] = [];
     private _historyIndex: number = -1;
-    private _currentCategory: string = 'hot';
+    private _currentCategory: string = 'random';
     private _page: number = 1;
     public followGeminiEnabled: boolean = true;
     private _geminiWatcher?: fs.FSWatcher;
@@ -502,8 +502,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         <div class="overlay" id="top-overlay">
             <div class="controls">
                 <select id="category-select">
-                    <option value="hot" selected>Hot</option>
-                    <option value="random">Random</option>
+                    <option value="hot">Hot</option>
+                    <option value="random" selected>Random</option>
                     <option value="rising">Rising</option>
                     <option value="fresh">Fresh</option>
                 </select>
