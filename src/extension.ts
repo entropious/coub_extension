@@ -664,6 +664,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                 togglePlay();
             } else if (message.type === 'setFollowGemini') {
                 geminiToggle.checked = message.value;
+                resetOverlayTimer();
             }
         });
 
