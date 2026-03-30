@@ -45,13 +45,13 @@
       {
         "command": "coub-panel.next",
         "title": "Next Coub",
-        "icon": "$(arrow-right)",
+        "icon": "$(chevron-right)",
         "category": "Coub"
       },
       {
         "command": "coub-panel.previous",
         "title": "Previous Coub",
-        "icon": "$(arrow-left)",
+        "icon": "$(chevron-left)",
         "category": "Coub"
       },
       {
@@ -100,13 +100,8 @@
     "menus": {
       "view/title": [
         {
-          "command": "coub-panel.next",
-          "when": "view == coub-panel.view && coub-panel.isVisible",
-          "group": "navigation"
-        },
-        {
           "command": "coub-panel.refresh",
-          "when": "view == coub-panel.view && coub-panel.isVisible",
+          "when": "coub-panel.isVisible",
           "group": "navigation"
         }
       ],
