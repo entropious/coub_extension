@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
     
     context.subscriptions.push(
-        vscode.commands.registerCommand('coub-panel.back', () => {
+        vscode.commands.registerCommand('coub-panel.previous', () => {
             provider.previousCoub();
         })
     );
@@ -36,6 +36,11 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('coub-panel.toggle-gemini-sync', () => {
+            provider.toggleGeminiSync();
+        })
+    );
 }
 
 class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -98,6 +103,13 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     ) {
         this._view = webviewView;
 
+        // Set initial visibility
+        vscode.commands.executeCommand('setContext', 'coub-panel.isVisible', webviewView.visible);
+
+        webviewView.onDidChangeVisibility(() => {
+            vscode.commands.executeCommand('setContext', 'coub-panel.isVisible', webviewView.visible);
+        });
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
@@ -117,17 +129,11 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                 case 'requestNext':
                     await this.nextCoub();
                     break;
-                case 'requestBack':
+                case 'requestPrevious':
                     await this.previousCoub();
                     break;
                 case 'toggleFollowGemini':
-                    this.followGeminiEnabled = data.value;
-                    this._context.globalState.update('followGemini', data.value);
-                    if (this.followGeminiEnabled) {
-                        this.startGeminiWatcher();
-                    } else {
-                        this.stopGeminiWatcher();
-                    }
+                    this.setGeminiSync(data.value);
                     break;
                 case 'setCategory':
                     this._currentCategory = data.value;
@@ -196,6 +202,28 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     public togglePlay() {
         if (this._view) {
             this._view.webview.postMessage({ type: 'toggle' });
+        }
+    }
+
+    public toggleGeminiSync() {
+        this.setGeminiSync(!this.followGeminiEnabled);
+    }
+
+    private setGeminiSync(value: boolean) {
+        this.followGeminiEnabled = value;
+        this._context.globalState.update('followGemini', this.followGeminiEnabled);
+        
+        if (this.followGeminiEnabled) {
+            this.startGeminiWatcher();
+        } else {
+            this.stopGeminiWatcher();
+        }
+
+        if (this._view) {
+            this._view.webview.postMessage({ 
+                type: 'setFollowGemini', 
+                value: this.followGeminiEnabled 
+            });
         }
     }
 
@@ -495,7 +523,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                         <span class="slider"></span>
                     </label>
                 </div>
-                <button id="back-btn">Back</button>
+                <button id="previous-btn">Previous</button>
                 <button id="next-btn" class="primary">Next</button>
             </div>
         </div>
@@ -541,9 +569,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
 
         vscode.postMessage({ type: 'webviewReady' });
 
-        const backBtn = document.getElementById('back-btn');
-        backBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'requestBack' });
+        const previousBtn = document.getElementById('previous-btn');
+        previousBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'requestPrevious' });
         });
 
         nextBtn.addEventListener('click', () => {
@@ -580,7 +608,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             if (e.key === 'ArrowRight') {
                 vscode.postMessage({ type: 'requestNext' });
             } else if (e.key === 'ArrowLeft') {
-                vscode.postMessage({ type: 'requestBack' });
+                vscode.postMessage({ type: 'requestPrevious' });
             } else if (e.key === ' ') { // Space for play/pause
                 e.preventDefault();
                 togglePlay();
