@@ -25,7 +25,7 @@
       "panel": [
         {
           "id": "coub-panel-container",
-          "title": "Coub Explorer",
+          "title": "Coub Player",
           "icon": "media/coub.svg"
         }
       ]
@@ -45,16 +45,29 @@
       {
         "command": "coub-panel.next",
         "title": "Next Coub",
-        "icon": "$(arrow-right)"
+        "icon": "$(arrow-right)",
+        "category": "Coub"
+      },
+      {
+        "command": "coub-panel.previous",
+        "title": "Previous Coub",
+        "icon": "$(arrow-left)",
+        "category": "Coub"
       },
       {
         "command": "coub-panel.refresh",
         "title": "Refresh Feed",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "category": "Coub"
       },
       {
         "command": "coub-panel.toggle-play",
         "title": "Toggle Play/Pause",
+        "category": "Coub"
+      },
+      {
+        "command": "coub-panel.toggle-gemini-sync",
+        "title": "Toggle Gemini Sync",
         "category": "Coub"
       }
     ],
@@ -62,20 +75,61 @@
       {
         "command": "coub-panel.toggle-play",
         "key": "ctrl+alt+p",
-        "mac": "cmd+alt+p"
+        "mac": "cmd+alt+p",
+        "when": "coub-panel.isVisible"
+      },
+      {
+        "command": "coub-panel.next",
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o",
+        "when": "coub-panel.isVisible"
+      },
+      {
+        "command": "coub-panel.previous",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "coub-panel.isVisible"
+      },
+      {
+        "command": "coub-panel.toggle-gemini-sync",
+        "key": "ctrl+alt+u",
+        "mac": "cmd+alt+u",
+        "when": "coub-panel.isVisible"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "coub-panel.next",
-          "when": "view == coub-panel.view",
+          "when": "view == coub-panel.view && coub-panel.isVisible",
           "group": "navigation"
         },
         {
           "command": "coub-panel.refresh",
-          "when": "view == coub-panel.view",
+          "when": "view == coub-panel.view && coub-panel.isVisible",
           "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "coub-panel.next",
+          "when": "coub-panel.isVisible"
+        },
+        {
+          "command": "coub-panel.previous",
+          "when": "coub-panel.isVisible"
+        },
+        {
+          "command": "coub-panel.refresh",
+          "when": "coub-panel.isVisible"
+        },
+        {
+          "command": "coub-panel.toggle-play",
+          "when": "coub-panel.isVisible"
+        },
+        {
+          "command": "coub-panel.toggle-gemini-sync",
+          "when": "coub-panel.isVisible"
         }
       ]
     }
