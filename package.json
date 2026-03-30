@@ -75,55 +75,55 @@
         "command": "coub-panel.toggle-play",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p",
-        "when": "coub-panel.isVisible"
+        "when": "view.coub-panel.view.visible"
       },
       {
         "command": "coub-panel.next",
         "key": "ctrl+alt+o",
         "mac": "cmd+alt+o",
-        "when": "coub-panel.isVisible"
+        "when": "view.coub-panel.view.visible"
       },
       {
         "command": "coub-panel.previous",
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
-        "when": "coub-panel.isVisible"
+        "when": "view.coub-panel.view.visible"
       },
       {
         "command": "coub-panel.toggle-gemini-sync",
         "key": "ctrl+alt+u",
         "mac": "cmd+alt+u",
-        "when": "coub-panel.isVisible"
+        "when": "view.coub-panel.view.visible"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "coub-panel.refresh",
-          "when": "coub-panel.isVisible",
+          "when": "view.coub-panel.view.visible",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "coub-panel.next",
-          "when": "coub-panel.isVisible"
+          "when": "view.coub-panel.view.visible"
         },
         {
           "command": "coub-panel.previous",
-          "when": "coub-panel.isVisible"
+          "when": "view.coub-panel.view.visible"
         },
         {
           "command": "coub-panel.refresh",
-          "when": "coub-panel.isVisible"
+          "when": "view.coub-panel.view.visible"
         },
         {
           "command": "coub-panel.toggle-play",
-          "when": "coub-panel.isVisible"
+          "when": "view.coub-panel.view.visible"
         },
         {
           "command": "coub-panel.toggle-gemini-sync",
-          "when": "coub-panel.isVisible"
+          "when": "view.coub-panel.view.visible"
         }
       ]
     }
