@@ -103,13 +103,6 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     ) {
         this._view = webviewView;
 
-        // Set initial visibility
-        vscode.commands.executeCommand('setContext', 'coub-panel.isVisible', webviewView.visible);
-
-        webviewView.onDidChangeVisibility(() => {
-            vscode.commands.executeCommand('setContext', 'coub-panel.isVisible', webviewView.visible);
-        });
-
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
