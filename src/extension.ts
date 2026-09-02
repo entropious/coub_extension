@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as claudeHooks from './claudeHooks';
 
 
 export function activate(context: vscode.ExtensionContext) {
@@ -37,8 +36,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('coub-panel.toggle-gemini-sync', () => {
-            provider.toggleGeminiSync();
+        vscode.commands.registerCommand('coub-panel.toggle-claude-sync', () => {
+            provider.toggleClaudeSync();
         })
     );
 }
@@ -51,48 +50,68 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
     private _historyIndex: number = -1;
     private _currentCategory: string = 'random';
     private _page: number = 1;
-    public followGeminiEnabled: boolean = true;
-    private _geminiWatcher?: fs.FSWatcher;
+    public followClaudeEnabled: boolean = false;
+    private _claudeWatcher?: fs.FSWatcher;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
     ) {
-        this.followGeminiEnabled = this._context.globalState.get<boolean>('followGemini', true);
-        if (this.followGeminiEnabled) {
-            this.startGeminiWatcher();
+        this.followClaudeEnabled = this._context.globalState.get<boolean>('followClaude', false);
+        if (this.followClaudeEnabled) {
+            this.enableClaudeSync();
         }
     }
 
     public dispose() {
-        this.stopGeminiWatcher();
+        this.stopClaudeWatcher();
     }
 
-    public startGeminiWatcher() {
-        if (this._geminiWatcher) {
+    /** Installs the Claude Code hooks (if missing) and starts following the state they write. */
+    private enableClaudeSync() {
+        try {
+            if (!claudeHooks.hooksInstalled()) {
+                claudeHooks.installHooks();
+            } else {
+                claudeHooks.writeHookScript();
+            }
+        } catch (err) {
+            console.error('Failed to install Claude hooks:', err);
+            vscode.window.showErrorMessage(`Coub Panel: could not install Claude Code hooks (${err})`);
             return;
         }
 
-        const geminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
-        if (!fs.existsSync(geminiDir)) {
+        this.startClaudeWatcher();
+    }
+
+    public startClaudeWatcher() {
+        if (this._claudeWatcher) {
             return;
         }
 
         try {
-            this._geminiWatcher = fs.watch(geminiDir, { persistent: false }, (_eventType, filename) => {
-                if (filename && filename.endsWith('.pb')) {
-                    this.play();
+            this._claudeWatcher = fs.watch(claudeHooks.stateDir, { persistent: false }, (_eventType, filename) => {
+                if (filename === claudeHooks.stateFileName) {
+                    this.applyClaudeState();
                 }
             });
         } catch (err) {
-            console.error('Failed to attach Gemini watcher:', err);
+            console.error('Failed to attach Claude watcher:', err);
         }
     }
 
-    public stopGeminiWatcher() {
-        if (this._geminiWatcher) {
-            this._geminiWatcher.close();
-            this._geminiWatcher = undefined;
+    public stopClaudeWatcher() {
+        if (this._claudeWatcher) {
+            this._claudeWatcher.close();
+            this._claudeWatcher = undefined;
+        }
+    }
+
+    private applyClaudeState() {
+        if (claudeHooks.readState() === 'busy') {
+            this.play();
+        } else {
+            this.pause();
         }
     }
 
@@ -113,9 +132,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'webviewReady':
-                    webviewView.webview.postMessage({ 
-                        type: 'setFollowGemini', 
-                        value: this.followGeminiEnabled
+                    webviewView.webview.postMessage({
+                        type: 'setFollowClaude',
+                        value: this.followClaudeEnabled
                     });
                     await this.nextCoub();
                     break;
@@ -125,8 +144,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                 case 'requestPrevious':
                     await this.previousCoub();
                     break;
-                case 'toggleFollowGemini':
-                    this.setGeminiSync(data.value);
+                case 'toggleFollowClaude':
+                    this.setClaudeSync(data.value);
                     break;
                 case 'setCategory':
                     this._currentCategory = data.value;
@@ -198,24 +217,29 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         }
     }
 
-    public toggleGeminiSync() {
-        this.setGeminiSync(!this.followGeminiEnabled);
+    public toggleClaudeSync() {
+        this.setClaudeSync(!this.followClaudeEnabled);
     }
 
-    private setGeminiSync(value: boolean) {
-        this.followGeminiEnabled = value;
-        this._context.globalState.update('followGemini', this.followGeminiEnabled);
-        
-        if (this.followGeminiEnabled) {
-            this.startGeminiWatcher();
+    private setClaudeSync(value: boolean) {
+        this.followClaudeEnabled = value;
+        this._context.globalState.update('followClaude', this.followClaudeEnabled);
+
+        if (this.followClaudeEnabled) {
+            this.enableClaudeSync();
         } else {
-            this.stopGeminiWatcher();
+            this.stopClaudeWatcher();
+            try {
+                claudeHooks.uninstallHooks();
+            } catch (err) {
+                console.error('Failed to remove Claude hooks:', err);
+            }
         }
 
         if (this._view) {
-            this._view.webview.postMessage({ 
-                type: 'setFollowGemini', 
-                value: this.followGeminiEnabled 
+            this._view.webview.postMessage({
+                type: 'setFollowClaude',
+                value: this.followClaudeEnabled
             });
         }
     }
@@ -501,9 +525,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                     <option value="fresh">Fresh</option>
                 </select>
                 <div class="auto-play-container">
-                    <span title="Sync with Gemini (Antigravity)">Gemini Sync</span>
+                    <span title="Play while Claude Code is working (via Claude hooks)">Claude Sync</span>
                     <label class="switch">
-                        <input type="checkbox" id="gemini-toggle" checked>
+                        <input type="checkbox" id="claude-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -548,7 +572,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         const nextBtn = document.getElementById('next-btn');
         const categorySelect = document.getElementById('category-select');
         const autoPlayToggle = document.getElementById('auto-play-toggle');
-        const geminiToggle = document.getElementById('gemini-toggle');
+        const claudeToggle = document.getElementById('claude-toggle');
         const loadingScreen = document.getElementById('loading-screen');
         const coubTitle = document.getElementById('coub-title');
         const coubMeta = document.getElementById('coub-meta');
@@ -627,8 +651,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             }
         });
 
-        geminiToggle.addEventListener('change', () => {
-            vscode.postMessage({ type: 'toggleFollowGemini', value: geminiToggle.checked });
+        claudeToggle.addEventListener('change', () => {
+            vscode.postMessage({ type: 'toggleFollowClaude', value: claudeToggle.checked });
         });
 
         categorySelect.addEventListener('change', () => {
@@ -655,8 +679,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                 audio.pause();
             } else if (message.type === 'toggle') {
                 togglePlay();
-            } else if (message.type === 'setFollowGemini') {
-                geminiToggle.checked = message.value;
+            } else if (message.type === 'setFollowClaude') {
+                claudeToggle.checked = message.value;
                 resetOverlayTimer();
             }
         });
