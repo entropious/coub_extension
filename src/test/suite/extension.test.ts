@@ -5,11 +5,11 @@ suite('Extension Test Suite', () => {
 	vscode.window.showInformationMessage('Start all tests.');
 
 	test('Extension should be present', () => {
-		assert.ok(vscode.extensions.getExtension('alexey.coub-panel'));
+		assert.ok(vscode.extensions.getExtension('Entro.coub-panel'));
 	});
 
 	test('Should activate extension', async () => {
-		const extension = vscode.extensions.getExtension('alexey.coub-panel');
+		const extension = vscode.extensions.getExtension('Entro.coub-panel');
 		await extension?.activate();
 		assert.strictEqual(extension?.isActive, true);
 	});

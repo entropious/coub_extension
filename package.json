@@ -65,8 +65,8 @@
         "category": "Coub"
       },
       {
-        "command": "coub-panel.toggle-gemini-sync",
-        "title": "Toggle Gemini Sync",
+        "command": "coub-panel.toggle-claude-sync",
+        "title": "Toggle Claude Sync",
         "category": "Coub"
       }
     ],
@@ -90,7 +90,7 @@
         "when": "view.coub-panel.view.visible"
       },
       {
-        "command": "coub-panel.toggle-gemini-sync",
+        "command": "coub-panel.toggle-claude-sync",
         "key": "ctrl+alt+u",
         "mac": "cmd+alt+u",
         "when": "view.coub-panel.view.visible"
@@ -122,7 +122,7 @@
           "when": "view.coub-panel.view.visible"
         },
         {
-          "command": "coub-panel.toggle-gemini-sync",
+          "command": "coub-panel.toggle-claude-sync",
           "when": "view.coub-panel.view.visible"
         }
       ]

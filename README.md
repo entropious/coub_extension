@@ -9,6 +9,7 @@ Enjoy short, looping videos from Coub directly in your VS Code panel!
 - **Endless Feed**: Browse Hot, Random, Rising and Fresh coubs.
 - **TikTok-style Auto-Play**: Automatically advanced to the next coub when the track ends.
 - **Direct Control**: Use clicking on the video to play/pause.
+- **Claude Sync**: Plays while Claude Code is working and pauses when it stops or waits for you. Turning the toggle on installs the required hooks into `~/.claude/settings.json`; turning it off removes them.
 - **High Quality**: Uses direct high-quality video and audio streams.
 - **Glassmorphism UI**: Modern and sleek interface integrated with VS Code themes.
 

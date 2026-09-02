@@ -3,6 +3,10 @@ import { runTests } from '@vscode/test-electron';
 
 async function main() {
 	try {
+		// VS Code's integrated terminal sets this, which makes the spawned VS Code
+		// start as a plain Node process and reject the GUI flags the runner passes.
+		delete process.env.ELECTRON_RUN_AS_NODE;
+
 		// The folder containing the Extension Manifest package.json
 		// Passed to `--extensionDevelopmentPath`
 		const extensionDevelopmentPath = path.resolve(__dirname, '../../');
@@ -15,7 +19,7 @@ async function main() {
 		await runTests({ 
 			extensionDevelopmentPath, 
 			extensionTestsPath,
-			vscodeExecutablePath: '/Applications/Visual Studio Code.app/Contents/MacOS/Electron' 
+			vscodeExecutablePath: '/Applications/Visual Studio Code.app/Contents/MacOS/Code'
 		});
 	} catch (err) {
 		console.error('Failed to run tests');
