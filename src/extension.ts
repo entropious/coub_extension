@@ -351,11 +351,35 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             right: 0;
             padding: 10px;
             background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 8px;
             align-items: center;
             z-index: 100;
             transition: opacity 0.3s;
+        }
+
+        .overlay .switches {
+            justify-self: center;
+        }
+
+        /* Set when the three groups no longer fit one row: the switches drop below. */
+        .overlay.compact .category {
+            grid-column: 1;
+        }
+
+        .overlay.compact .actions {
+            grid-column: 3;
+        }
+
+        .overlay.compact .switches {
+            grid-row: 2;
+            grid-column: 1 / -1;
+            justify-self: stretch;
+            justify-content: space-between;
+            /* The label starts where the select's own text does; the right switch
+               ends flush with the edge of the button above it. */
+            padding-left: 6px;
         }
 
         .bottom-overlay {
@@ -371,8 +395,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
 
         .controls {
             display: flex;
-            gap: 8px;
+            gap: 12px;
             align-items: center;
+            min-width: 0;
         }
 
         button {
@@ -388,6 +413,8 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             align-items: center;
             gap: 4px;
             transition: background 0.2s;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         button:hover {
@@ -407,6 +434,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             border-radius: 4px;
             font-size: 12px;
             backdrop-filter: blur(10px);
+            flex-shrink: 0;
         }
 
         .title {
@@ -429,12 +457,14 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             align-items: center;
             gap: 6px;
             font-size: 11px;
+            white-space: nowrap;
         }
 
         /* Glassmorphism Slider Toggle */
         .switch {
             position: relative;
             display: inline-block;
+            flex: 0 0 34px;
             width: 34px;
             height: 20px;
         }
@@ -517,29 +547,31 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
 
     <div class="container" id="main-container">
         <div class="overlay" id="top-overlay">
-            <div class="controls">
+            <div class="controls category">
                 <select id="category-select">
                     <option value="hot">Hot</option>
                     <option value="random" selected>Random</option>
                     <option value="rising">Rising</option>
                     <option value="fresh">Fresh</option>
                 </select>
-                <div class="auto-play-container">
-                    <span title="Play while Claude Code is working (via Claude hooks)">Claude Sync</span>
+            </div>
+            <div class="controls switches">
+                <div class="auto-play-container" title="Play while Claude Code is working (via Claude hooks)">
+                    <span>Claude Sync</span>
                     <label class="switch">
                         <input type="checkbox" id="claude-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="auto-play-container">
+                <div class="auto-play-container" title="Advance to the next coub when the track ends">
                     <span>Auto-Play</span>
                     <label class="switch">
                         <input type="checkbox" id="auto-play-toggle" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
+            </div>
+            <div class="controls actions">
                 <button id="previous-btn">Previous</button>
                 <button id="next-btn" class="primary">Next</button>
             </div>
@@ -583,6 +615,27 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         let currentCoub = null;
         let isMuted = true;
         let syncInterval = null;
+
+        // The switches move to their own row once the three groups stop fitting
+        // one line, measured rather than guessed from a breakpoint, so the panel
+        // width, the font size and the editor zoom all count.
+        const switchesGroup = topOverlay.querySelector('.switches');
+        const categoryGroup = topOverlay.querySelector('.category');
+        const actionsGroup = topOverlay.querySelector('.actions');
+
+        const updateOverlayLayout = () => {
+            topOverlay.classList.remove('compact');
+            const style = getComputedStyle(topOverlay);
+            const gap = parseFloat(style.columnGap) || 0;
+            const available = topOverlay.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            const needed = categoryGroup.offsetWidth + switchesGroup.offsetWidth + actionsGroup.offsetWidth + gap * 2;
+            if (needed > available) {
+                topOverlay.classList.add('compact');
+            }
+        };
+
+        new ResizeObserver(updateOverlayLayout).observe(document.body);
+        updateOverlayLayout();
 
         vscode.postMessage({ type: 'webviewReady' });
 
