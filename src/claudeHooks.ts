@@ -16,6 +16,10 @@ export const hookScript = path.join(stateDir, 'coub-hook.sh');
 const HOOK_EVENTS: Array<{ event: string; state: ClaudeState }> = [
     { event: 'UserPromptSubmit', state: 'busy' },
     { event: 'PreToolUse', state: 'busy' },
+    // Fires once the tool actually runs, which is how playback resumes after a
+    // permission prompt has been answered.
+    { event: 'PostToolUse', state: 'busy' },
+    { event: 'PermissionRequest', state: 'idle' },
     { event: 'Notification', state: 'idle' },
     { event: 'Stop', state: 'idle' },
     { event: 'SessionEnd', state: 'idle' }
