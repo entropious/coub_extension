@@ -61,6 +61,16 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         if (this.followClaudeEnabled) {
             this.enableClaudeSync();
         }
+
+        this._context.subscriptions.push(
+            vscode.window.onDidChangeWindowState((state) => {
+                if (state.focused) {
+                    this.autoResume('window');
+                } else {
+                    this.autoPause('window');
+                }
+            })
+        );
     }
 
     public dispose() {
@@ -109,9 +119,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
 
     private applyClaudeState() {
         if (claudeHooks.readState() === 'busy') {
-            this.play();
+            this.autoResume('claude');
         } else {
-            this.pause();
+            this.autoPause('claude');
         }
     }
 
@@ -199,15 +209,17 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         }
     }
 
-    public play() {
+    /** Pauses playback on behalf of `reason`, unless the viewer paused by hand. */
+    public autoPause(reason: string) {
         if (this._view) {
-            this._view.webview.postMessage({ type: 'play' });
+            this._view.webview.postMessage({ type: 'autoPause', reason });
         }
     }
 
-    public pause() {
+    /** Drops `reason`; playback resumes once nothing else holds it paused. */
+    public autoResume(reason: string) {
         if (this._view) {
-            this._view.webview.postMessage({ type: 'pause' });
+            this._view.webview.postMessage({ type: 'autoResume', reason });
         }
     }
 
@@ -229,6 +241,7 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             this.enableClaudeSync();
         } else {
             this.stopClaudeWatcher();
+            this.autoResume('claude');
             try {
                 claudeHooks.uninstallHooks();
             } catch (err) {
@@ -648,24 +661,58 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             vscode.postMessage({ type: 'requestNext' });
         });
 
+        // A pause set by hand outranks every automatic one: Claude and the window
+        // focus may hold their own reasons, but none of them resumes a video the
+        // viewer stopped, and clearing them never overrides that choice.
+        let pausedByHand = false;
+        const autoPauseReasons = new Set();
+
+        const startMedia = () => {
+            video.play();
+            audio.play();
+        };
+
+        const stopMedia = () => {
+            video.pause();
+            audio.pause();
+        };
+
+        const shouldPlay = () => !pausedByHand && autoPauseReasons.size === 0;
+
+        const setPlayingByHand = (playing) => {
+            pausedByHand = !playing;
+            if (playing) {
+                autoPauseReasons.clear();
+                startMedia();
+            } else {
+                stopMedia();
+            }
+        };
+
+        const autoPause = (reason) => {
+            if (pausedByHand) {
+                return;
+            }
+            autoPauseReasons.add(reason);
+            stopMedia();
+        };
+
+        const autoResume = (reason) => {
+            autoPauseReasons.delete(reason);
+            if (shouldPlay()) {
+                startMedia();
+            }
+        };
+
         unmuteOverlay.addEventListener('click', () => {
             isMuted = false;
             unmuteOverlay.classList.add('hidden');
             audio.muted = false;
             video.muted = true;
-            audio.play();
-            video.play();
+            setPlayingByHand(true);
         });
 
-        const togglePlay = () => {
-            if (video.paused) {
-                video.play();
-                audio.play();
-            } else {
-                video.pause();
-                audio.pause();
-            }
-        };
+        const togglePlay = () => setPlayingByHand(video.paused);
 
         // Tap/click to play/pause
         document.querySelector('.player-wrapper').addEventListener('click', (e) => {
@@ -696,11 +743,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
         autoPlayToggle.addEventListener('change', () => {
             updateLoopBehavior();
             // If we just turned off autoplay, ensure we are looping if ended
-            if (!autoPlayToggle.checked && (video.ended || audio.ended)) {
+            if (!autoPlayToggle.checked && (video.ended || audio.ended) && shouldPlay()) {
                 video.currentTime = 0;
                 audio.currentTime = 0;
-                video.play();
-                audio.play();
+                startMedia();
             }
         });
 
@@ -724,12 +770,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             const message = event.data;
             if (message.type === 'loadCoub') {
                 loadCoub(message.value);
-            } else if (message.type === 'play') {
-                video.play();
-                audio.play();
-            } else if (message.type === 'pause') {
-                video.pause();
-                audio.pause();
+            } else if (message.type === 'autoPause') {
+                autoPause(message.reason);
+            } else if (message.type === 'autoResume') {
+                autoResume(message.reason);
             } else if (message.type === 'toggle') {
                 togglePlay();
             } else if (message.type === 'setFollowClaude') {
@@ -763,8 +807,9 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             video.muted = true; // Video is always muted for autoplay
 
             const startPlayback = () => {
-                video.play();
-                audio.play();
+                if (shouldPlay()) {
+                    startMedia();
+                }
                 if (!isMuted) {
                     unmuteOverlay.classList.add('hidden');
                 }
