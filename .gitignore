@@ -4,3 +4,8 @@ out
 *.vsix
 .DS_Store
 .preview
+
+# стенд: всё кроме самих скриптов
+.probe/*
+!.probe/devhost.sh
+!.probe/devhost-check.js

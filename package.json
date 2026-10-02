@@ -2,7 +2,7 @@
   "name": "coub-panel",
   "displayName": "Coub Panel",
   "description": "Watch Coubs in a VS Code panel with auto-advance and random discovery.",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "publisher": "Entro",
   "repository": {
     "type": "git",
@@ -68,6 +68,12 @@
         "command": "coub-panel.toggle-claude-sync",
         "title": "Toggle Claude Sync",
         "category": "Coub"
+      },
+      {
+        "command": "coub-panel.open-in-tab",
+        "title": "Open in Editor Tab",
+        "icon": "$(link-external)",
+        "category": "Coub"
       }
     ],
     "keybindings": [
@@ -75,55 +81,63 @@
         "command": "coub-panel.toggle-play",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p",
-        "when": "view.coub-panel.view.visible"
+        "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
       },
       {
         "command": "coub-panel.next",
         "key": "ctrl+alt+o",
         "mac": "cmd+alt+o",
-        "when": "view.coub-panel.view.visible"
+        "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
       },
       {
         "command": "coub-panel.previous",
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
-        "when": "view.coub-panel.view.visible"
+        "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
       },
       {
         "command": "coub-panel.toggle-claude-sync",
         "key": "ctrl+alt+u",
         "mac": "cmd+alt+u",
-        "when": "view.coub-panel.view.visible"
+        "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "coub-panel.refresh",
-          "when": "view.coub-panel.view.visible",
+          "when": "view == coub-panel.view",
+          "group": "navigation"
+        },
+        {
+          "command": "coub-panel.open-in-tab",
+          "when": "view == coub-panel.view",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "coub-panel.next",
-          "when": "view.coub-panel.view.visible"
+          "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
         },
         {
           "command": "coub-panel.previous",
-          "when": "view.coub-panel.view.visible"
+          "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
         },
         {
           "command": "coub-panel.refresh",
-          "when": "view.coub-panel.view.visible"
+          "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
         },
         {
           "command": "coub-panel.toggle-play",
-          "when": "view.coub-panel.view.visible"
+          "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
         },
         {
           "command": "coub-panel.toggle-claude-sync",
-          "when": "view.coub-panel.view.visible"
+          "when": "view.coub-panel.view.visible || coub-panel.tabOpen"
+        },
+        {
+          "command": "coub-panel.open-in-tab"
         }
       ]
     }

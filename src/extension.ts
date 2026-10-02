@@ -40,16 +40,155 @@ export function activate(context: vscode.ExtensionContext) {
             provider.toggleClaudeSync();
         })
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('coub-panel.open-in-tab', () => {
+            provider.openInTab();
+        })
+    );
 }
 
-class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
-    public static readonly viewType = 'coub-panel.view';
-    private _view?: vscode.WebviewView;
+/**
+ * One player: a webview with a feed, a history and a category of its own. The
+ * panel and the editor tab each run their own, so browsing in one leaves the
+ * other where it was; playback is all they share.
+ */
+class CoubPlayer {
     private _coubQueue: any[] = [];
     private _history: any[] = [];
     private _historyIndex: number = -1;
     private _currentCategory: string = 'random';
     private _page: number = 1;
+
+    constructor(
+        private readonly _webview: vscode.Webview,
+        private readonly _owner: CoubViewProvider
+    ) {
+        this._webview.onDidReceiveMessage((data) => this._handleMessage(data));
+    }
+
+    private async _handleMessage(data: any) {
+        switch (data.type) {
+            case 'webviewReady':
+                this.post({ type: 'setFollowClaude', value: this._owner.followClaudeEnabled });
+                await this.nextCoub();
+                break;
+            case 'requestNext':
+                await this.nextCoub();
+                break;
+            case 'requestPrevious':
+                await this.previousCoub();
+                break;
+            case 'toggleFollowClaude':
+                this._owner.setClaudeSync(data.value);
+                break;
+            case 'setCategory':
+                this._currentCategory = data.value;
+                this._coubQueue = [];
+                this._history = [];
+                this._historyIndex = -1;
+                this._page = 1;
+                await this.nextCoub();
+                break;
+            case 'openExternal':
+                vscode.env.openExternal(vscode.Uri.parse(data.value));
+                break;
+            case 'openInTab':
+                this._owner.openInTab();
+                break;
+        }
+    }
+
+    public post(message: any) {
+        this._webview.postMessage(message);
+    }
+
+    public async nextCoub() {
+        // If we are in history, go forward
+        if (this._historyIndex < this._history.length - 1) {
+            this._historyIndex++;
+            this._showCoub(this._history[this._historyIndex]);
+            return;
+        }
+
+        // Fetch more if queue empty
+        if (this._coubQueue.length === 0) {
+            await this._fetchCoubs();
+        }
+
+        const coub = this._coubQueue.shift();
+        if (coub) {
+            this._history.push(coub);
+            this._historyIndex++;
+            this._showCoub(coub);
+        }
+    }
+
+    public async previousCoub() {
+        if (this._historyIndex > 0) {
+            this._historyIndex--;
+            this._showCoub(this._history[this._historyIndex]);
+        }
+    }
+
+    public refreshFeed() {
+        this._coubQueue = [];
+        this._page = 1;
+        this.nextCoub();
+    }
+
+    /** Pauses playback on behalf of `reason`, unless the viewer paused by hand. */
+    public autoPause(reason: string) {
+        this.post({ type: 'autoPause', reason });
+    }
+
+    /** Drops `reason`; playback resumes once nothing else holds it paused. */
+    public autoResume(reason: string) {
+        this.post({ type: 'autoResume', reason });
+    }
+
+    public togglePlay() {
+        this.post({ type: 'toggle' });
+    }
+
+    private _showCoub(coub: any) {
+        if (coub) {
+            this.post({ type: 'loadCoub', value: coub });
+        }
+    }
+
+    private async _fetchCoubs() {
+        try {
+            const endpoint = this._getEndpoint();
+            const response = await fetch(`${endpoint}?page=${this._page}&per_page=10`);
+            const data: any = await response.json();
+
+            if (data && data.coubs) {
+                this._coubQueue.push(...data.coubs);
+                this._page++;
+            }
+        } catch (error) {
+            console.error('Failed to fetch coubs', error);
+            vscode.window.showErrorMessage('Error fetching Coubs from API');
+        }
+    }
+
+    private _getEndpoint() {
+        switch (this._currentCategory) {
+            case 'rising': return 'https://coub.com/api/v2/timeline/subscriptions/rising';
+            case 'fresh': return 'https://coub.com/api/v2/timeline/explore/fresh';
+            case 'random': return 'https://coub.com/api/v2/timeline/explore/random';
+            default: return 'https://coub.com/api/v2/timeline/explore/hot';
+        }
+    }
+}
+
+class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+    public static readonly viewType = 'coub-panel.view';
+    private _view?: vscode.WebviewView;
+    private _panelPlayer?: CoubPlayer;
+    private _tabPanel?: vscode.WebviewPanel;
+    private _tabPlayer?: CoubPlayer;
     public followClaudeEnabled: boolean = false;
     private _claudeWatcher?: fs.FSWatcher;
 
@@ -137,103 +276,131 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             localResourceRoots: [this._extensionUri]
         };
 
-        webviewView.webview.html = this._getHtmlForWebview();
+        webviewView.webview.html = this._getHtmlForWebview(false);
+        this._panelPlayer = new CoubPlayer(webviewView.webview, this);
 
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'webviewReady':
-                    webviewView.webview.postMessage({
-                        type: 'setFollowClaude',
-                        value: this.followClaudeEnabled
-                    });
-                    await this.nextCoub();
-                    break;
-                case 'requestNext':
-                    await this.nextCoub();
-                    break;
-                case 'requestPrevious':
-                    await this.previousCoub();
-                    break;
-                case 'toggleFollowClaude':
-                    this.setClaudeSync(data.value);
-                    break;
-                case 'setCategory':
-                    this._currentCategory = data.value;
-                    this._coubQueue = [];
-                    this._history = [];
-                    this._historyIndex = -1;
-                    this._page = 1;
-                    await this.nextCoub();
-                    break;
-                case 'openExternal':
-                    vscode.env.openExternal(vscode.Uri.parse(data.value));
-                    break;
-            }
-        });
+        webviewView.onDidChangeVisibility(() => this._applyPlaybackRights());
+        this._applyPlaybackRights();
     }
 
-    public async nextCoub() {
-        // If we are in history, go forward
-        if (this._historyIndex < this._history.length - 1) {
-            this._historyIndex++;
-            this._showCoub(this._history[this._historyIndex]);
+    /** Opens the player in an editor tab, or brings the open one forward. */
+    public openInTab() {
+        if (this._tabPanel) {
+            this._tabPanel.reveal();
             return;
         }
 
-        // Fetch more if queue empty
-        if (this._coubQueue.length === 0) {
-            await this._fetchCoubs();
+        const panel = vscode.window.createWebviewPanel(
+            'coub-panel.tab',
+            'Coub Player',
+            vscode.ViewColumn.Active,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [this._extensionUri]
+            }
+        );
+        panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.png');
+
+        this._tabPanel = panel;
+        panel.webview.html = this._getHtmlForWebview(true);
+        this._tabPlayer = new CoubPlayer(panel.webview, this);
+
+        panel.onDidChangeViewState(() => this._applyPlaybackRights());
+        panel.onDidDispose(() => {
+            this._tabPanel = undefined;
+            this._tabPlayer = undefined;
+            vscode.commands.executeCommand('setContext', 'coub-panel.tabOpen', false);
+            this._applyPlaybackRights();
+        });
+
+        vscode.commands.executeCommand('setContext', 'coub-panel.tabOpen', true);
+        this._applyPlaybackRights();
+    }
+
+    /**
+     * Only a player on screen plays, and a tab in view outranks the panel, so
+     * the two never talk over each other. Neither one overrides a pause the
+     * viewer set by hand.
+     */
+    private _applyPlaybackRights() {
+        const tabInView = Boolean(this._tabPanel?.visible);
+
+        if (this._panelPlayer) {
+            if (this._view?.visible) {
+                this._panelPlayer.autoResume('hidden');
+            } else {
+                this._panelPlayer.autoPause('hidden');
+            }
+
+            if (tabInView) {
+                this._panelPlayer.autoPause('tab');
+            } else {
+                this._panelPlayer.autoResume('tab');
+            }
         }
 
-        const coub = this._coubQueue.shift();
-        if (coub) {
-            this._history.push(coub);
-            this._historyIndex++;
-            this._showCoub(coub);
+        if (this._tabPlayer) {
+            if (tabInView) {
+                this._tabPlayer.autoResume('hidden');
+            } else {
+                this._tabPlayer.autoPause('hidden');
+            }
         }
+    }
+
+    private get _players(): CoubPlayer[] {
+        return [this._panelPlayer, this._tabPlayer].filter((p): p is CoubPlayer => Boolean(p));
+    }
+
+    /** The player a command acts on: the tab while it is the one in focus. */
+    private get _activePlayer(): CoubPlayer | undefined {
+        if (this._tabPanel?.active && this._tabPlayer) {
+            return this._tabPlayer;
+        }
+        if (this._view?.visible && this._panelPlayer) {
+            return this._panelPlayer;
+        }
+        return this._tabPlayer ?? this._panelPlayer;
+    }
+
+    public async nextCoub() {
+        await this._activePlayer?.nextCoub();
     }
 
     public async previousCoub() {
-        if (this._historyIndex > 0) {
-            this._historyIndex--;
-            this._showCoub(this._history[this._historyIndex]);
-        }
+        await this._activePlayer?.previousCoub();
     }
 
-    private _showCoub(coub: any) {
-        if (coub && this._view) {
-            this._view.webview.postMessage({
-                type: 'loadCoub',
-                value: coub
-            });
-        }
+    public refreshFeed() {
+        this._activePlayer?.refreshFeed();
+    }
+
+    public togglePlay() {
+        this._activePlayer?.togglePlay();
     }
 
     /** Pauses playback on behalf of `reason`, unless the viewer paused by hand. */
     public autoPause(reason: string) {
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'autoPause', reason });
+        for (const player of this._players) {
+            player.autoPause(reason);
         }
     }
 
     /** Drops `reason`; playback resumes once nothing else holds it paused. */
     public autoResume(reason: string) {
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'autoResume', reason });
+        for (const player of this._players) {
+            player.autoResume(reason);
         }
-    }
-
-    public togglePlay() {
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'toggle' });
-        }
+        // A reason the tab or the panel is still held by must survive the drop.
+        this._applyPlaybackRights();
     }
 
     public toggleClaudeSync() {
         this.setClaudeSync(!this.followClaudeEnabled);
     }
 
-    private setClaudeSync(value: boolean) {
+    public setClaudeSync(value: boolean) {
         this.followClaudeEnabled = value;
         this._context.globalState.update('followClaude', this.followClaudeEnabled);
 
@@ -249,46 +416,12 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             }
         }
 
-        if (this._view) {
-            this._view.webview.postMessage({
-                type: 'setFollowClaude',
-                value: this.followClaudeEnabled
-            });
+        for (const player of this._players) {
+            player.post({ type: 'setFollowClaude', value: this.followClaudeEnabled });
         }
     }
 
-    public refreshFeed() {
-        this._coubQueue = [];
-        this._page = 1;
-        this.nextCoub();
-    }
-
-    private async _fetchCoubs() {
-        try {
-            const endpoint = this._getEndpoint();
-            const response = await fetch(`${endpoint}?page=${this._page}&per_page=10`);
-            const data: any = await response.json();
-            
-            if (data && data.coubs) {
-                this._coubQueue.push(...data.coubs);
-                this._page++;
-            }
-        } catch (error) {
-            console.error('Failed to fetch coubs', error);
-            vscode.window.showErrorMessage('Error fetching Coubs from API');
-        }
-    }
-
-    private _getEndpoint() {
-        switch (this._currentCategory) {
-            case 'rising': return 'https://coub.com/api/v2/timeline/subscriptions/rising';
-            case 'fresh': return 'https://coub.com/api/v2/timeline/explore/fresh';
-            case 'random': return 'https://coub.com/api/v2/timeline/explore/random';
-            default: return 'https://coub.com/api/v2/timeline/explore/hot';
-        }
-    }
-
-    private _getHtmlForWebview() {
+    private _getHtmlForWebview(inTab: boolean) {
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -604,7 +737,10 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
             <div id="coub-title" class="title">Loading...</div>
             <div class="controls" style="justify-content: space-between; margin-top: 8px;">
                 <div class="metadata" id="coub-meta">By Unknown</div>
-                <button id="browser-btn">🌐 View</button>
+                <div class="controls">
+                    ${inTab ? '' : '<button id="tab-btn" title="Open a player in an editor tab">⧉ Tab</button>'}
+                    <button id="browser-btn">🌐 View</button>
+                </div>
             </div>
         </div>
     </div>
@@ -765,6 +901,13 @@ class CoubViewProvider implements vscode.WebviewViewProvider, vscode.Disposable 
                 vscode.postMessage({ type: 'openExternal', value: 'https://coub.com/view/' + currentCoub.permalink });
             }
         });
+
+        const tabBtn = document.getElementById('tab-btn');
+        if (tabBtn) {
+            tabBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'openInTab' });
+            });
+        }
 
         window.addEventListener('message', event => {
             const message = event.data;
