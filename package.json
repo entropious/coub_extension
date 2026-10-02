@@ -36,7 +36,7 @@
           "type": "webview",
           "id": "coub-panel.view",
           "name": "Coub Player",
-          "visibility": "visible"
+          "visibility": "collapsed"
         }
       ]
     },
